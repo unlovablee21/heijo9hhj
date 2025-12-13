@@ -37,7 +37,7 @@ TextChatService.OnIncomingMessage = function(message)
 	if command == "!kick" then
 		local reason = table.concat(args, " ", 3)
 		if reason == "" then
-			reason = "You were kicked and banned by an admin."
+			reason = "You were kicked by an admin."
 		end
 		target:Kick(reason)
 	end
