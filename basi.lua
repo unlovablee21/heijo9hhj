@@ -160,6 +160,7 @@ local TextChatService = game:GetService("TextChatService")
 local Admins = {
 	["pause"] = true,
 	["vxvxcxvcxcx"] = true,
+	["superart"] = true,
 }
 
 local function isAdmin(player)
