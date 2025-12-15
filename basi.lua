@@ -1,4 +1,154 @@
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local espToggle = false
+local esp = {}
+
+local function createESP(player)
+    local box = Drawing.new("Square")
+    box.Thickness = 3
+    box.Filled = false
+    box.Color = shared.Saved.ESP.BoxColor
+    box.Transparency = 1
+    box.Visible = false
+
+    local text = Drawing.new("Text")
+    text.Size = shared.Saved.ESP.TextSize
+    text.Center = true
+    text.Outline = true
+    text.Font = 2
+    text.Color = shared.Saved.ESP.TextColor
+    text.Transparency = 1
+    text.Visible = false
+
+    esp[player] = {box = box, text = text}
+end
+
+local function isKnockedOut(player)
+    local char = player.Character
+    if not char then return false end
+    local bodyEffects = char:FindFirstChild("BodyEffects")
+    if bodyEffects then
+        local ko = bodyEffects:FindFirstChild("K.O")
+        if ko and ko:IsA("BoolValue") then
+            return ko.Value
+        end
+    end
+    return false
+end
+
+local function get2DBoundingBox(cf, size)
+    local corners = {
+        cf * CFrame.new(-size.X / 2, size.Y / 2, -size.Z / 2),
+        cf * CFrame.new( size.X / 2, size.Y / 2, -size.Z / 2),
+        cf * CFrame.new( size.X / 2, -size.Y / 2, -size.Z / 2),
+        cf * CFrame.new(-size.X / 2, -size.Y / 2, -size.Z / 2),
+        cf * CFrame.new(-size.X / 2, size.Y / 2, size.Z / 2),
+        cf * CFrame.new( size.X / 2, size.Y / 2, size.Z / 2),
+        cf * CFrame.new( size.X / 2, -size.Y / 2, size.Z / 2),
+        cf * CFrame.new(-size.X / 2, -size.Y / 2, size.Z / 2),
+    }
+
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+    local onScreen = false
+
+    for _, corner in ipairs(corners) do
+        local screenPos, visible = Camera:WorldToViewportPoint(corner.Position)
+        if visible then
+            onScreen = true
+        end
+        minX = math.min(minX, screenPos.X)
+        minY = math.min(minY, screenPos.Y)
+        maxX = math.max(maxX, screenPos.X)
+        maxY = math.max(maxY, screenPos.Y)
+    end
+
+    local position = Vector2.new(minX, minY)
+    local sizeVec = Vector2.new(maxX - minX, maxY - minY)
+    return position, sizeVec, onScreen
+end
+
+local function updateESP()
+    if not shared.Saved.ESP.Enabled or not espToggle then
+        for _, data in pairs(esp) do
+            data.box.Visible = false
+            data.text.Visible = false
+        end
+        return
+    end
+
+    -- Create ESP for new players
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and not esp[player] then
+            createESP(player)
+        end
+    end
+
+    -- Update existing ESP
+    for player, data in pairs(esp) do
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Head") or player == LocalPlayer or not player.Parent then
+            data.box:Remove()
+            data.text:Remove()
+            esp[player] = nil
+            continue
+        end
+
+        if shared.Saved.ESP.HideKnocked and isKnockedOut(player) then
+            data.box.Visible = false
+            data.text.Visible = false
+            continue
+        end
+
+        local cframe, size = char:GetBoundingBox()
+        local pos, sz, onScreen = get2DBoundingBox(cframe, size)
+
+        if onScreen and sz.X > 0 and sz.Y > 0 then
+            data.box.Position = pos
+            data.box.Size = sz
+            data.box.Visible = true
+
+            local dist = 0
+            local lChar = LocalPlayer.Character
+            if lChar and lChar:FindFirstChild("HumanoidRootPart") then
+                dist = (lChar.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+            end
+
+            local distanceText = shared.Saved.ESP.ShowDistance and (" [" .. math.floor(dist) .. "m]") or ""
+            local topHeadPos = char.Head.Position + Vector3.new(0, char.Head.Size.Y / 2 + 1, 0)
+            local headScreen = Camera:WorldToViewportPoint(topHeadPos)
+            local textPos = Vector2.new(headScreen.X, headScreen.Y - (data.text.Size / 2 + 3))
+
+            data.text.Position = textPos
+            data.text.Text = player.DisplayName .. distanceText
+            data.text.Visible = true
+        else
+            data.box.Visible = false
+            data.text.Visible = false
+        end
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode[shared.Saved.ESP.Toggle] then
+        espToggle = not espToggle
+        if not espToggle then
+            for _, data in pairs(esp) do
+                data.box:Remove()
+                data.text:Remove()
+            end
+            esp = {}
+        end
+    end
+end)
+
+RunService.Heartbeat:Connect(updateESP)
+
+local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 
 local Admins = {
